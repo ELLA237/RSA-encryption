@@ -1,0 +1,254 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Apr 17 13:44:40 2020
+
+@author: Mr ABBAS-TURKI
+@modified by : Gabriella Ndjamba Batomen
+"""
+
+import hashlib
+import binascii
+import random
+
+#exponentiation modulaire
+def home_mod_exponent(x,y,n): #exponentiation modulaire
+        r=1
+        while y>0:
+            if(y%2==1) :
+                r=(r*x)%n
+            x=(x*x)%n
+            y=y//2
+        return r
+            
+#algorithme d'euclide étendu pour la recherche de l'exposant secret
+def home_ext_euclide(y,b): 
+    #Etape 1: Recherche du PGCD(y,b)    
+    #les variable w et h sont initialiser
+    w = y
+    h = b
+    p = [] 
+    #Effectue les divisions successives jusqu'à ce que h devienne égal à 0.
+    while h!=0 : 
+     p.append(w//h) 
+     w,h = h, w%h  
+    d = [0,1] 
+    p.pop() 
+    #Etape 2: Calcul de l'inverse
+    for i in range(len(p)):
+        t = (d[i] - p[i]*d[i+1])%y 
+        d.append(t)
+    return d[-1]
+
+
+
+def home_pgcd(a,b): #recherche du pgcd
+    if(b==0): 
+        return a 
+    else: 
+        return home_pgcd(b,a%b)
+    
+# exponentiation modulaire utilisant le théorème du reste chinois
+def CRT_home_mod_exp(u,n,dq,dp,q,p,q_inv):
+    
+    Mq = home_mod_exponent(u,dq,q)
+    Mp = home_mod_exponent(u,dp,p)
+    u = ((Mp-Mq)*q_inv)%p
+    f = (Mq + u*q)%n
+    return f
+    
+# formatter un message string en liste de blocs hexadécimaux 
+def formater(msg,k):
+    Block_msg = [] # découpage du message sans le formattage
+    length = len(msg)
+
+    # Si le message fait moins de k caractères on le découpe en deux moitiés
+    # pour s'assurer que chaque bloc contient au maximum 50% du message
+    if length < k:
+        Block_msg = [msg[:length//2],msg[length//2:]]
+    # Sinon on le découpe en blocs de k/2 caractères
+    else:
+        i =0
+        j = 0
+        taille = k//2
+        while (j < length):
+            j = i + taille
+            if j > length: j = length # Si on arrive au bout du message on fait un bloc plus petit
+            Block_msg.append(msg[i:j]) # On ajoute le découpage du message allant de i à j
+            i += taille
+    Msg_formater =[] # message découpé et formatté en hexadecimal
+    for block in  Block_msg:
+        Block_formater = '0002'
+        for i in range(k - len(block) - 3): # On ajoute autant d'octets aléatoires que nécessaire
+            Block_formater += Aleabyte()
+        Block_formater += '00'
+        for char in block: # On traduit les caractères en hexadécimal et on les ajoute au bloc
+            Block_formater += "{:02x}".format(ord(char))
+
+        Msg_formater.append(Block_formater)
+    return Msg_formater
+
+# déformatte une liste de blocs hexadécimaux en string
+def deformater(Msg_formater):
+
+    message = ''
+    
+    for block in Msg_formater :
+
+        j = 4 # On va directement en index 4 pour sauter les '0002'
+
+        # On passe les octets aléatoires jusqu'à tomber sur '00'
+        while block[j] + block[j+1] != '00' :
+         j += 2        
+
+        j += 2 # On se place après le '00' pour lire les données
+
+        # On traduit l'hexadéciamal en string et on ajoute ça au message
+        try:
+            message += bytes.fromhex(block[j:len(block)]).decode('utf-8')
+        except:
+            print('Utilisez des caractères utf-8 svp')
+
+    return message
+
+# renvoie deux octet aléatoire différent de 00
+hex_sym = ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
+
+def Aleabyte():
+    k = '00'
+    while k == '00':
+        k = random.choice(hex_sym) + random.choice(hex_sym)
+    return k
+
+def home_string_to_int(x): # pour transformer un string en int
+    z=0
+    for i in reversed(range(len(x))):
+        z=int(ord(x[i]))*pow(2,(8*i))+z
+    return(z)
+
+
+def home_int_to_string(x): # pour transformer un int en string
+    txt=''
+    res1=x
+    while res1>0:
+        res=res1%(pow(2,8))
+        res1=(res1-res)//(pow(2,8))
+        txt=txt+chr(res)
+    return txt
+
+
+def mot25char(): #entrer le secret
+    secret=input("Ecriver votre secret de 25 caractères au maximum : ")
+    while (len(secret)>25):
+        secret=input("c'est beaucoup trop long, 25 caractères max S.V.P : ")
+    return(secret)
+k = 8 # taille des blocs pour le découpage PKCS  
+
+#On va sur bigprimes.org et on utilise 60 carractères pour sha256
+
+#voici les éléments de la clé d'Alice
+x1a = 873311000421951395668413761180963055862507620076542304172947  # p
+x2a = 285552279012849749855169578136092776046272771929917292230809  # q
+
+na=x1a*x2a  #n
+phia=((x1a-1)*(x2a-1))//home_pgcd(x1a-1,x2a-1)
+ea=17 #exposant public
+da=home_ext_euclide(phia,ea) #exposant privé
+
+#Calculs supplémentaires pour la méthode du CRT
+qa = x1a
+pa = x2a
+qa_inv=home_ext_euclide(pa,qa)
+dqa = da%(qa-1)
+dpa = da%(pa-1)
+
+#voici les éléments de la clé de bob
+
+x1b = 609593912230569678098577269286226950711549466380196226468827  # p
+x2b = 365194022714328554543797939423556399764784076098815492083787  # q
+
+
+nb=x1b*x2b # n
+phib=((x1b-1)*(x2b-1))//home_pgcd(x1b-1,x2b-1)
+eb=23 # exposants public
+db=home_ext_euclide(phib,eb) #exposant privé
+
+
+print("Vous êtes Bob, vous souhaitez envoyer un secret à Alice")
+print("voici votre clé publique que tout le monde a le droit de consulter")
+print("n =",nb)
+print("exposant :",eb)
+print("voici votre précieux secret")
+print("d =",db)
+print("*******************************************************************")
+print("Voici aussi la clé publique d'Alice que tout le monde peut conslter")
+print("n =",na)
+print("exposent :",ea)
+print("*******************************************************************")
+print("il est temps de lui envoyer votre precieux secret")
+print("*******************************************************************")
+x=input("appuyer sur entrer")
+secret=mot25char()
+print("*******************************************************************")
+Block_hex = formater(secret,k)
+
+print("le message découpé en blocs et bourré: \n",Block_hex)
+
+int_Block = []
+for block in Block_hex:
+    int_Block.append(int(block,16))
+print("les blocs en décimal: \n",int_Block)
+Block_chiffrer = []
+for block in int_Block:
+    Block_chiffrer.append(home_mod_exponent(block, ea, na))
+
+print("les blocs chiffré avec la clé publique d'Alice: ", Block_chiffrer)
+
+print("*******************************************************************")
+print("On utilise la fonction de hashage SHA256 pour obtenir le hash du message",secret)
+Bhachis0=hashlib.sha256(secret.encode(encoding='UTF-8',errors='strict')).digest() #SHA256 du message
+print("voici le hash en nombre décimal ")
+Bhachis1=binascii.b2a_uu(Bhachis0)
+Bhachis2=Bhachis1.decode() #en string
+Bhachis3=home_string_to_int(Bhachis2)
+print(Bhachis3)
+print("voici la signature avec la clé privée de Bob du hachis")
+signe=home_mod_exponent(Bhachis3, db, nb)
+print(signe)
+print("*******************************************************************")
+print("Bob envoie \n \t 1-le message découpé en blocs chiffrés avec la clé public d'Alice \n \t 2-et le hash signé \n",signe)
+print("*******************************************************************")
+x=input("appuyer sur entrer")
+print("*******************************************************************")
+
+
+print("Alice déchiffre les blocs chiffré avec le CRT ce qui donne: ")
+
+Block_dechiffrer = []
+for block in Block_chiffrer:
+    Block_dechiffrer.append(CRT_home_mod_exp(block, na, dqa, dpa, qa, pa, qa_inv))
+print(Block_dechiffrer)
+print("Alice converti les blocs en hexadécimal: ")
+Block_hex = []
+for block in Block_dechiffrer:
+    Block_hex.append('000' + f'{block:x}')
+print(Block_hex)
+dechif = deformater(Block_hex)
+
+print(dechif)
+print("*******************************************************************")
+print("Alice déchiffre la signature de Bob \n",signe,"\n ce qui donne  en décimal")
+designe=home_mod_exponent(signe, eb, nb)
+print(designe)
+print("Alice vérifie si elle obtient la même chose avec le hash de \n",dechif)
+Ahachis0=hashlib.sha256(dechif.encode(encoding='UTF-8',errors='strict')).digest()
+Ahachis1=binascii.b2a_uu(Ahachis0)
+Ahachis2=Ahachis1.decode()
+Ahachis3=home_string_to_int(Ahachis2)
+print(Ahachis3)
+print("La différence =",Ahachis3-designe)
+if (Ahachis3-designe==0):
+    print("Felicitation!!\n")
+    print("Alice : Bob m'a envoyé : ",dechif)
+    print("Tout se passe trés bien\n")
+else:
+    print("oups")
